@@ -31,6 +31,7 @@ import { compareTransactions } from "./lib/transactions";
 import {
 	transactionTypeValidator,
 	validatePositiveCopAmount,
+	validateTransactionNotes,
 } from "./lib/validators";
 
 const MAX_RECENT_LIMIT = 20;
@@ -302,6 +303,7 @@ export const create = mutation({
 	},
 	handler: async (ctx, args) => {
 		const userId = await requireUserId(ctx);
+		const notes = validateTransactionNotes(args.notes);
 
 		if (args.fixedExpenseId) {
 			if (args.type !== "expense") {
@@ -314,7 +316,7 @@ export const create = mutation({
 				date: args.date,
 				periodKey: periodKeyFromTimestamp(args.date),
 				categoryId: args.categoryId,
-				notes: args.notes,
+				notes,
 			});
 		}
 
@@ -328,7 +330,7 @@ export const create = mutation({
 				amount: args.amount,
 				categoryId: args.categoryId,
 				expenseAccountId: args.accountId,
-				notes: args.notes,
+				notes,
 				date: args.date,
 			});
 			return result.expenseId;
@@ -343,7 +345,7 @@ export const create = mutation({
 				paidDate: args.date,
 				accountId: args.accountId,
 				categoryId: args.categoryId,
-				notes: args.notes,
+				notes,
 			});
 		}
 
@@ -361,7 +363,7 @@ export const create = mutation({
 			accountId: args.accountId,
 			toAccountId: args.type === "transfer" ? args.toAccountId : undefined,
 			categoryId: args.categoryId,
-			notes: args.notes?.trim() || undefined,
+			notes,
 			sortOrder: now,
 			createdAt: now,
 			updatedAt: now,
@@ -413,6 +415,7 @@ export const update = mutation({
 		});
 
 		const amount = await validateTransactionInput(ctx, userId, args);
+		const notes = validateTransactionNotes(args.notes);
 		const newDeltas = getBalanceDeltas({ ...args, amount });
 		await applyBalanceDeltas(ctx, newDeltas, userId);
 
@@ -423,7 +426,7 @@ export const update = mutation({
 			accountId: args.accountId,
 			toAccountId: args.type === "transfer" ? args.toAccountId : undefined,
 			categoryId: args.categoryId,
-			notes: args.notes?.trim() || undefined,
+			notes,
 			updatedAt: Date.now(),
 		});
 

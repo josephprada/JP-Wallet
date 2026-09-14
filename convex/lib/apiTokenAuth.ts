@@ -72,15 +72,31 @@ export function tokenPrefixFromPlaintext(plaintext: string): string {
 	return `${TOKEN_PLAINTEXT_PREFIX}${plaintext.slice(TOKEN_PLAINTEXT_PREFIX.length, TOKEN_PLAINTEXT_PREFIX.length + 6)}`;
 }
 
-/** SHA-256 hex de (pepper + plaintext). El pepper es defensa en profundidad opcional. */
+/** SHA-256 hex de (pepper + plaintext). */
 export async function hashToken(plaintext: string): Promise<string> {
-	const pepper = process.env.API_TOKEN_PEPPER ?? "";
+	const pepper = resolveApiTokenPepper();
 	const encoder = new TextEncoder();
 	const digest = await crypto.subtle.digest(
 		"SHA-256",
 		encoder.encode(pepper + plaintext),
 	);
 	return bufferToHex(digest);
+}
+
+/**
+ * Pepper vacío permitido por defecto (compat con PATs legacy hasheados sin pepper).
+ * Activa `API_TOKEN_REQUIRE_PEPPER=1` en Convex **después** de configurar
+ * `API_TOKEN_PEPPER` (y de rotar PATs si el pepper cambia).
+ */
+function resolveApiTokenPepper(): string {
+	const pepper = process.env.API_TOKEN_PEPPER ?? "";
+	if (!pepper && process.env.API_TOKEN_REQUIRE_PEPPER === "1") {
+		throw new AgentGatewayError(
+			"internal",
+			"API_TOKEN_PEPPER is not configured",
+		);
+	}
+	return pepper;
 }
 
 export type AuthenticatedApiToken = {
@@ -91,22 +107,19 @@ export type AuthenticatedApiToken = {
 };
 
 /**
- * Autentica un PAT: busca por hash, rechaza revocados/caducados y
- * actualiza `lastUsedAt`. Nunca confiar en un `userId` provisto por el
- * llamante — siempre usar el que devuelve esta función.
+ * Autentica un PAT ya hasheado (el httpAction hashea el Bearer y no pasa plaintext).
  */
-export async function authenticateApiToken(
+export async function authenticateApiTokenByHash(
 	ctx: MutationCtx,
-	bearerToken: string | null | undefined,
+	tokenHash: string | null | undefined,
 ): Promise<AuthenticatedApiToken> {
-	if (!bearerToken || !bearerToken.trim()) {
+	if (!tokenHash || !tokenHash.trim()) {
 		throw new AgentGatewayError("unauthorized", "Missing bearer token");
 	}
 
-	const tokenHash = await hashToken(bearerToken.trim());
 	const token = await ctx.db
 		.query("apiTokens")
-		.withIndex("by_token_hash", (q) => q.eq("tokenHash", tokenHash))
+		.withIndex("by_token_hash", (q) => q.eq("tokenHash", tokenHash.trim()))
 		.unique();
 
 	if (!token) {
@@ -145,6 +158,21 @@ export async function authenticateApiToken(
 		scopes: token.scopes.filter(isApiScope),
 		tokenPrefix: token.tokenPrefix,
 	};
+}
+
+/**
+ * Autentica un PAT en texto plano (create/tests). Preferir
+ * `authenticateApiTokenByHash` en el gateway HTTP.
+ */
+export async function authenticateApiToken(
+	ctx: MutationCtx,
+	bearerToken: string | null | undefined,
+): Promise<AuthenticatedApiToken> {
+	if (!bearerToken || !bearerToken.trim()) {
+		throw new AgentGatewayError("unauthorized", "Missing bearer token");
+	}
+	const tokenHash = await hashToken(bearerToken.trim());
+	return authenticateApiTokenByHash(ctx, tokenHash);
 }
 
 /** Lanza `forbidden` si al `scopes` le falta alguno de los `required`. */

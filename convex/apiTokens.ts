@@ -12,7 +12,11 @@ import {
 	tokenPrefixFromPlaintext,
 } from "./lib/apiTokenAuth";
 import { requireUserId } from "./lib/auth";
-import { apiScopeValidator, validateNonEmptyName } from "./lib/validators";
+import {
+	apiScopeValidator,
+	DEFAULT_API_TOKEN_TTL_MS,
+	validateNonEmptyName,
+} from "./lib/validators";
 
 const MAX_ACTIVE_TOKENS = 10;
 const MAX_TOKEN_NAME_LENGTH = 80;
@@ -64,8 +68,10 @@ function validateScopes(scopes: string[]): ApiScope[] {
 	return unique as ApiScope[];
 }
 
-function validateExpiry(expiresAt: number | undefined): number | undefined {
-	if (expiresAt === undefined) return undefined;
+function validateExpiry(expiresAt: number | undefined): number {
+	if (expiresAt === undefined) {
+		return Date.now() + DEFAULT_API_TOKEN_TTL_MS;
+	}
 	if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
 		throw new Error("Invalid expiry");
 	}

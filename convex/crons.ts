@@ -9,4 +9,10 @@ crons.daily(
 	internal.notifications.processDaily,
 );
 
+crons.daily(
+	"attachments-pending-cleanup",
+	{ hourUTC: 4, minuteUTC: 0 },
+	internal.attachments.cleanupExpiredPendingUploads,
+);
+
 export default crons;

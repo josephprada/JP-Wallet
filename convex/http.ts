@@ -2,7 +2,7 @@ import { httpRouter } from "convex/server";
 import { internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
 import { auth } from "./auth";
-import type { AgentGatewayErrorCode } from "./lib/apiTokenAuth";
+import { type AgentGatewayErrorCode, hashToken } from "./lib/apiTokenAuth";
 
 const http = httpRouter();
 
@@ -49,6 +49,18 @@ http.route({
 			);
 		}
 
+		let tokenHash: string;
+		try {
+			tokenHash = await hashToken(tokenPlaintext);
+		} catch (error) {
+			const message =
+				error instanceof Error ? error.message : "Token hashing failed";
+			return jsonResponse(
+				{ ok: false, error: { code: "internal", message } },
+				500,
+			);
+		}
+
 		let body: { tool?: unknown; args?: unknown; confirm?: unknown };
 		try {
 			body = await request.json();
@@ -75,7 +87,7 @@ http.route({
 		const result = await ctx.runMutation(
 			internal.agentGateway.authenticateAndDispatch,
 			{
-				tokenPlaintext,
+				tokenHash,
 				tool: body.tool,
 				args: body.args ?? {},
 				confirm: typeof body.confirm === "boolean" ? body.confirm : undefined,

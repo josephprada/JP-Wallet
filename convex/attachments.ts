@@ -1,5 +1,11 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+import {
+	type MutationCtx,
+	internalMutation,
+	mutation,
+	query,
+} from "./_generated/server";
 import {
 	assertTaxDocumentEditable,
 	requireAttachmentOwnership,
@@ -11,14 +17,29 @@ import {
 	MAX_ATTACHMENTS_PER_TAX_ITEM,
 	MAX_ATTACHMENTS_PER_TRANSACTION,
 	MAX_ATTACHMENT_SIZE,
+	MAX_PENDING_UPLOADS_PER_USER,
+	PENDING_UPLOAD_TTL_MS,
 	mimeTypeValidator,
+	sanitizeAttachmentFilename,
 	validateMimeType,
 } from "./lib/validators";
 
 export const generateUploadUrl = mutation({
 	args: {},
 	handler: async (ctx) => {
-		await requireUserId(ctx);
+		const userId = await requireUserId(ctx);
+		const pending = await ctx.db
+			.query("pendingUploads")
+			.withIndex("by_user", (q) => q.eq("userId", userId))
+			.collect();
+		const now = Date.now();
+		const active = pending.filter(
+			(row) => now - row.createdAt < PENDING_UPLOAD_TTL_MS,
+		);
+		if (active.length >= MAX_PENDING_UPLOADS_PER_USER) {
+			throw new Error("Too many pending uploads; try again later");
+		}
+		await ctx.db.insert("pendingUploads", { userId, createdAt: now });
 		return await ctx.storage.generateUploadUrl();
 	},
 });
@@ -63,6 +84,30 @@ export const listByTaxItem = query({
 	},
 });
 
+async function assertStorageAvailable(
+	ctx: MutationCtx,
+	storageId: Id<"_storage">,
+): Promise<{ mimeType: "image/jpeg" | "image/png" | "application/pdf"; size: number }> {
+	const metadata = await ctx.storage.getMetadata(storageId);
+	if (!metadata?.contentType) {
+		throw new Error("Invalid storage file");
+	}
+	const mimeType = validateMimeType(metadata.contentType);
+	if (metadata.size > MAX_ATTACHMENT_SIZE) {
+		throw new Error("File exceeds 10 MB limit");
+	}
+
+	const claimed = await ctx.db
+		.query("attachments")
+		.withIndex("by_storage", (q) => q.eq("storageId", storageId))
+		.first();
+	if (claimed) {
+		throw new Error("Storage file already attached");
+	}
+
+	return { mimeType, size: metadata.size };
+}
+
 export const create = mutation({
 	args: {
 		transactionId: v.id("transactions"),
@@ -75,10 +120,7 @@ export const create = mutation({
 		const userId = await requireUserId(ctx);
 		await requireTransactionOwnership(ctx, userId, args.transactionId);
 
-		if (args.size > MAX_ATTACHMENT_SIZE) {
-			throw new Error("File exceeds 10 MB limit");
-		}
-		validateMimeType(args.mimeType);
+		const { mimeType, size } = await assertStorageAvailable(ctx, args.storageId);
 
 		const existing = await ctx.db
 			.query("attachments")
@@ -96,9 +138,9 @@ export const create = mutation({
 			entityType: "transaction",
 			entityId: args.transactionId,
 			storageId: args.storageId,
-			filename: args.filename.trim() || "archivo",
-			mimeType: args.mimeType,
-			size: args.size,
+			filename: sanitizeAttachmentFilename(args.filename),
+			mimeType,
+			size,
 			uploadedAt: Date.now(),
 		});
 	},
@@ -117,10 +159,7 @@ export const createForTaxItem = mutation({
 		const item = await requireTaxItemOwnership(ctx, userId, args.taxItemId);
 		await assertTaxDocumentEditable(ctx, userId, item.documentId);
 
-		if (args.size > MAX_ATTACHMENT_SIZE) {
-			throw new Error("ATTACHMENT_TOO_LARGE");
-		}
-		validateMimeType(args.mimeType);
+		const { mimeType, size } = await assertStorageAvailable(ctx, args.storageId);
 
 		const existing = await ctx.db
 			.query("attachments")
@@ -138,9 +177,9 @@ export const createForTaxItem = mutation({
 			entityType: "taxItem",
 			entityId: args.taxItemId,
 			storageId: args.storageId,
-			filename: args.filename.trim() || "archivo",
-			mimeType: args.mimeType,
-			size: args.size,
+			filename: sanitizeAttachmentFilename(args.filename),
+			mimeType,
+			size,
 			uploadedAt: Date.now(),
 		});
 	},
@@ -160,7 +199,7 @@ export const remove = mutation({
 
 		if (attachment.entityType === "taxItem") {
 			const taxItem = await ctx.db.get(
-				attachment.entityId as import("./_generated/dataModel").Id<"taxItems">,
+				attachment.entityId as Id<"taxItems">,
 			);
 			if (taxItem) {
 				await assertTaxDocumentEditable(ctx, userId, taxItem.documentId);
@@ -180,16 +219,30 @@ export const getUrl = query({
 	},
 	handler: async (ctx, { storageId }) => {
 		const userId = await requireUserId(ctx);
-		const attachments = await ctx.db
+		const owned = await ctx.db
 			.query("attachments")
-			.withIndex("by_user", (q) => q.eq("userId", userId))
-			.collect();
-
-		const owned = attachments.some((a) => a.storageId === storageId);
-		if (!owned) {
+			.withIndex("by_storage", (q) => q.eq("storageId", storageId))
+			.first();
+		if (!owned || owned.userId !== userId) {
 			return null;
 		}
 
 		return await ctx.storage.getUrl(storageId);
+	},
+});
+
+/** Limpia bookkeeping de pendingUploads expirados (no borra blobs huérfanos). */
+export const cleanupExpiredPendingUploads = internalMutation({
+	args: {},
+	handler: async (ctx) => {
+		const cutoff = Date.now() - PENDING_UPLOAD_TTL_MS;
+		const expired = await ctx.db
+			.query("pendingUploads")
+			.withIndex("by_created", (q) => q.lt("createdAt", cutoff))
+			.take(200);
+		for (const row of expired) {
+			await ctx.db.delete(row._id);
+		}
+		return { deleted: expired.length };
 	},
 });

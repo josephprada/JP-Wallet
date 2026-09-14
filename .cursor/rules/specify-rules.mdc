@@ -3,6 +3,6 @@ alwaysApply: true
 ---
 
 <!-- SPECKIT START -->
-Change activo: `changes/notifications-polish/` (Change 9 — 2026-09-10).
-Rama: `feat/notifications-polish`. Changes 1–8 cerrados en prod.
+Change activo: `changes/security-hardening/` (Change 10 — 2026-09-14).
+Rama: `feat/security-hardening`. Changes 1–8 en prod; Change 9 en feat/testing.
 <!-- SPECKIT END -->

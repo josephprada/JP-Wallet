@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Env secrets — never commit (keep .env.example)
+.env
+.env.*
+!.env.example
+
 # Deploy keys (CI) — never commit
 deploy-keys/
 

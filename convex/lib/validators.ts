@@ -26,8 +26,16 @@ export const mimeTypeValidator = v.union(
 
 export const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
 export const MAX_ATTACHMENTS_PER_TRANSACTION = 5;
+export const MAX_ATTACHMENTS_PER_TAX_ITEM = 5;
 export const MAX_AVATAR_SIZE = 2 * 1024 * 1024;
 export const MAX_DISPLAY_NAME_LENGTH = 80;
+export const MAX_TRANSACTION_NOTES_LENGTH = 2000;
+export const MAX_ATTACHMENT_FILENAME_LENGTH = 255;
+export const MAX_PENDING_UPLOADS_PER_USER = 30;
+export const PENDING_UPLOAD_TTL_MS = 48 * 60 * 60 * 1000;
+export const DEFAULT_API_TOKEN_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+export const AGENT_RATE_LIMIT_WINDOW_MS = 60_000;
+export const AGENT_RATE_LIMIT_MAX = 60;
 
 const AVATAR_MIME_TYPES = ["image/jpeg", "image/png"] as const;
 export type AvatarMimeType = (typeof AVATAR_MIME_TYPES)[number];
@@ -71,6 +79,28 @@ export function validateMimeType(
 		throw new Error("File type not allowed");
 	}
 	return mimeType;
+}
+
+export function validateTransactionNotes(notes?: string): string | undefined {
+	if (!notes?.trim()) return undefined;
+	const trimmed = notes.trim();
+	if (trimmed.length > MAX_TRANSACTION_NOTES_LENGTH) {
+		throw new Error(
+			`Notes must be at most ${MAX_TRANSACTION_NOTES_LENGTH} characters`,
+		);
+	}
+	return trimmed;
+}
+
+/** Basename-only filename; strips path segments and control chars. */
+export function sanitizeAttachmentFilename(filename: string): string {
+	const raw = filename.trim() || "archivo";
+	const base = raw.split(/[/\\]/).pop()?.trim() || "archivo";
+	const cleaned = base
+		.replace(/[\u0000-\u001f\u007f]/g, "")
+		.replace(/^\.+/, "")
+		.slice(0, MAX_ATTACHMENT_FILENAME_LENGTH);
+	return cleaned || "archivo";
 }
 
 export function validateDisplayName(name: string): string {
@@ -315,7 +345,6 @@ export const taxSourceTypeValidator = v.union(
 export const MAX_TAX_ITEM_DESCRIPTION = 200;
 export const MAX_TAX_ITEM_NOTES = 500;
 export const MAX_TAX_DOCUMENT_NOTES = 1000;
-export const MAX_ATTACHMENTS_PER_TAX_ITEM = 5;
 
 export function validateTaxYear(taxYear: number): number {
 	const maxYear = new Date().getFullYear() + 1;

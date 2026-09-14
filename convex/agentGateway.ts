@@ -13,7 +13,7 @@ import {
 	type AgentGatewayErrorCode,
 	type AuthenticatedApiToken,
 	assertScopes,
-	authenticateApiToken,
+	authenticateApiTokenByHash,
 	recordAudit,
 } from "./lib/apiTokenAuth";
 import {
@@ -44,6 +44,8 @@ import { type TaxSection, assertTaxCategory } from "./lib/taxCategories";
 import { computeSectionTotals } from "./lib/taxTotals";
 import { compareTransactions } from "./lib/transactions";
 import {
+	AGENT_RATE_LIMIT_MAX,
+	AGENT_RATE_LIMIT_WINDOW_MS,
 	MAX_BUDGET_NOTES_LENGTH,
 	validateCreditName,
 	validateCreditNotes,
@@ -51,6 +53,7 @@ import {
 	validatePositiveCopAmount,
 	validateTaxItemDescription,
 	validateTaxItemNotes,
+	validateTransactionNotes,
 } from "./lib/validators";
 import {
 	applyBalanceDeltas,
@@ -568,7 +571,7 @@ async function toolCreateTransaction(
 	const accountId = asId<"accounts">(args.accountId, "accountId");
 	const categoryId = asId<"categories">(args.categoryId, "categoryId");
 	const toAccountId = asOptionalId<"accounts">(args.toAccountId);
-	const notes = asOptionalString(args.notes);
+	const notes = validateTransactionNotes(asOptionalString(args.notes));
 
 	const validatedAmount = await validateTransactionInput(ctx, userId, {
 		type,
@@ -594,7 +597,7 @@ async function toolCreateTransaction(
 		accountId,
 		toAccountId: type === "transfer" ? toAccountId : undefined,
 		categoryId,
-		notes: notes?.trim() || undefined,
+		notes,
 		sortOrder: now,
 		createdAt: now,
 		updatedAt: now,
@@ -647,7 +650,9 @@ async function toolUpdateTransaction(
 			? asOptionalId<"accounts">(args.toAccountId)
 			: existing.toAccountId;
 	const notes =
-		args.notes !== undefined ? asOptionalString(args.notes) : existing.notes;
+		args.notes !== undefined
+			? validateTransactionNotes(asOptionalString(args.notes))
+			: existing.notes;
 
 	const oldDeltas = getBalanceDeltas({
 		type: existing.type,
@@ -681,7 +686,7 @@ async function toolUpdateTransaction(
 		accountId,
 		toAccountId: type === "transfer" ? toAccountId : undefined,
 		categoryId,
-		notes: notes?.trim() || undefined,
+		notes,
 		updatedAt: Date.now(),
 	});
 
@@ -1166,6 +1171,39 @@ export type AgentGatewayResult =
 	| { ok: true; tool: string; data: unknown }
 	| { ok: false; error: { code: AgentGatewayErrorCode; message: string } };
 
+async function assertAgentRateLimit(
+	ctx: MutationCtx,
+	tokenId: Id<"apiTokens">,
+): Promise<void> {
+	const now = Date.now();
+	const existing = await ctx.db
+		.query("agentRateLimits")
+		.withIndex("by_token", (q) => q.eq("tokenId", tokenId))
+		.unique();
+
+	if (!existing || now - existing.windowStart >= AGENT_RATE_LIMIT_WINDOW_MS) {
+		if (existing) {
+			await ctx.db.patch(existing._id, { windowStart: now, count: 1 });
+		} else {
+			await ctx.db.insert("agentRateLimits", {
+				tokenId,
+				windowStart: now,
+				count: 1,
+			});
+		}
+		return;
+	}
+
+	if (existing.count >= AGENT_RATE_LIMIT_MAX) {
+		throw new AgentGatewayError(
+			"rate_limited",
+			`Rate limit exceeded (${AGENT_RATE_LIMIT_MAX} requests per minute)`,
+		);
+	}
+
+	await ctx.db.patch(existing._id, { count: existing.count + 1 });
+}
+
 async function runDispatch(
 	ctx: MutationCtx,
 	params: DispatchParams,
@@ -1198,18 +1236,19 @@ export const dispatch = internalMutation({
 
 export const authenticateAndDispatch = internalMutation({
 	args: {
-		tokenPlaintext: v.string(),
+		tokenHash: v.string(),
 		tool: v.string(),
 		args: v.any(),
 		confirm: v.optional(v.boolean()),
 	},
 	handler: async (
 		ctx,
-		{ tokenPlaintext, tool, args, confirm },
+		{ tokenHash, tool, args, confirm },
 	): Promise<AgentGatewayResult> => {
 		let auth: AuthenticatedApiToken;
 		try {
-			auth = await authenticateApiToken(ctx, tokenPlaintext);
+			auth = await authenticateApiTokenByHash(ctx, tokenHash);
+			await assertAgentRateLimit(ctx, auth.tokenId);
 		} catch (error) {
 			const gatewayError = toGatewayError(error);
 			return {

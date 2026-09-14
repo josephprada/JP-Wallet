@@ -160,7 +160,8 @@ export default defineSchema({
 		uploadedAt: v.number(),
 	})
 		.index("by_user", ["userId"])
-		.index("by_entity", ["entityType", "entityId"]),
+		.index("by_entity", ["entityType", "entityId"])
+		.index("by_storage", ["storageId"]),
 
 	budgets: defineTable({
 		userId: v.id("users"),
@@ -407,4 +408,17 @@ export default defineSchema({
 	})
 		.index("by_user_created", ["userId", "createdAt"])
 		.index("by_token_created", ["tokenId", "createdAt"]),
+
+	agentRateLimits: defineTable({
+		tokenId: v.id("apiTokens"),
+		windowStart: v.number(),
+		count: v.number(),
+	}).index("by_token", ["tokenId"]),
+
+	pendingUploads: defineTable({
+		userId: v.id("users"),
+		createdAt: v.number(),
+	})
+		.index("by_user", ["userId"])
+		.index("by_created", ["createdAt"]),
 });

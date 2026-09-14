@@ -1,4 +1,5 @@
 import { useToastStore } from "@app/stores/toast";
+import { sanitizeAppPath } from "@app/lib/core/safeAppPath";
 import { api } from "@convex/_generated/api";
 import { useConvexAuth, useQuery } from "convex/react";
 import { useEffect, useRef } from "react";
@@ -72,7 +73,7 @@ export function NotificationListener() {
 		const onMessage = (event: MessageEvent) => {
 			const data = event.data as { type?: string; url?: string } | undefined;
 			if (data?.type === "NOTIFICATION_NAV" && typeof data.url === "string") {
-				navigate(data.url);
+				navigate(sanitizeAppPath(data.url));
 			}
 		};
 		navigator.serviceWorker?.addEventListener("message", onMessage);

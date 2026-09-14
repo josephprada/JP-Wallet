@@ -62,9 +62,30 @@ La app en `apps/web/` consume JP-DS vía alias `@jp-ds/*` y Convex vía `@convex
 
 ---
 
-## Change activo: notifications-polish 🚧 (Change 9 — 2026-09-10)
+## Change activo: security-hardening 🚧 (Change 10 — 2026-09-14)
 
-Rama: `feat/notifications-polish` → `testing` → `main` (cuando se pida).
+Rama: `feat/security-hardening` → `testing` → `main` (cuando se pida).
+
+| Artefacto | Ruta |
+|-----------|------|
+| Propuesta | `changes/security-hardening/proposal.md` |
+| Spec | `changes/security-hardening/spec.md` |
+| Diseño | `changes/security-hardening/design.md` |
+| Tasks | `changes/security-hardening/tasks.md` |
+| Quickstart | `changes/security-hardening/quickstart.md` |
+| Auditoría | `docs/security-audit-2026-09.md` |
+
+**Alcance v1:** Adjuntos (metadata + provenance + GC); gateway (hash PAT + rate limit); deep-link allowlist; pepper/expiry; `.env` gitignore; notes/filename; HSTS + CSP borrador Nginx.
+
+**Flujo de ramas:** desarrollar y documentar en **`feat/*` → `testing`**; desplegar a producción (`main`) solo cuando se pida explícitamente.
+
+**Roadmap:** Changes 1–8 en prod. Change 9 (`notifications-polish`) en `feat/*` / testing. Change 10 en curso.
+
+---
+
+## Change reciente: notifications-polish 🚧 (Change 9 — 2026-09-10)
+
+Rama: `feat/notifications-polish` → `testing` → `main`.
 
 | Artefacto | Ruta |
 |-----------|------|
@@ -74,11 +95,7 @@ Rama: `feat/notifications-polish` → `testing` → `main` (cuando se pida).
 | Tasks | `changes/notifications-polish/tasks.md` |
 | Quickstart | `changes/notifications-polish/quickstart.md` |
 
-**Alcance v1:** Push solo fuera de foreground; copy + deep links; mora fijo +3/+6; omitir este mes (dashboard + notificaciones).
-
-**Flujo de ramas:** desarrollar y documentar en **`feat/*` → `testing`**; desplegar a producción (`main`) solo cuando se pida explícitamente.
-
-**Roadmap:** Changes 1–8 en prod. Change 9 en curso.
+**Alcance v1:** Push solo fuera de foreground; copy + deep links; mora fijo +3/+6; omitir este mes.
 
 ---
 

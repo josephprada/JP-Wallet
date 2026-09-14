@@ -1,4 +1,5 @@
 /// <reference lib="webworker" />
+import { sanitizeAppPath } from "@app/lib/core/safeAppPath";
 import { cleanupOutdatedCaches, precacheAndRoute } from "workbox-precaching";
 
 declare let self: ServiceWorkerGlobalScope;
@@ -33,7 +34,7 @@ self.addEventListener("push", (event) => {
 			await self.registration.showNotification(data?.title ?? "JP-WALLET", {
 				body: data?.body ?? "",
 				icon: "/icon.svg",
-				data: { url: data?.url ?? "/" },
+				data: { url: sanitizeAppPath(data?.url) },
 			});
 		})(),
 	);
@@ -41,7 +42,9 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
 	event.notification.close();
-	const url = (event.notification.data?.url as string | undefined) ?? "/";
+	const url = sanitizeAppPath(
+		event.notification.data?.url as string | undefined,
+	);
 	event.waitUntil(
 		(async () => {
 			const clientList = await self.clients.matchAll({
@@ -50,7 +53,10 @@ self.addEventListener("notificationclick", (event) => {
 			});
 			for (const client of clientList) {
 				const windowClient = client as WindowClient;
-				if ("navigate" in windowClient && typeof windowClient.navigate === "function") {
+				if (
+					"navigate" in windowClient &&
+					typeof windowClient.navigate === "function"
+				) {
 					try {
 						await windowClient.navigate(url);
 					} catch {

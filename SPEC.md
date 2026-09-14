@@ -633,12 +633,18 @@ packages/jp-ds/
    - Reparar spam de toasts al entrar y entrega push a bandeja del móvil
    - MCP: `list_fixed_expenses` + `pendingTotal`
    - Arnés Playwright (E2E/UI) para los escenarios del change
-10. 🚧 **Change 9: notifications-polish — Polish push + mora fijos + omitir mes** (en curso, `feat/notifications-polish`)
+10. 🚧 **Change 9: notifications-polish — Polish push + mora fijos + omitir mes** (`feat/notifications-polish`)
    - Push OS solo fuera de foreground; copy + deep links
    - Mora gasto fijo +3 / +6 días sin pagar
    - Estado “omitir este mes” (fuera de pendientes y notificaciones)
+11. 🚧 **Change 10: security-hardening — Remediación auditoría** (en curso, `feat/security-hardening`)
+   - Adjuntos: metadata real, provenance, cuotas/GC
+   - Gateway: sin PAT plaintext en mutations + rate limit Convex
+   - Deep-link allowlist; pepper/expiry PATs; `.env` gitignore; notes/filename
+   - Nginx: HSTS + borrador CSP (staging primero)
+   - Fuente: `docs/security-audit-2026-09.md`
 
-> **Roadmap:** Changes 1–8 en prod. Change 9 (`notifications-polish`) en curso.
+> **Roadmap:** Changes 1–8 en prod. Change 9 en feat/testing. Change 10 (`security-hardening`) en curso.
 
 ---
 
