@@ -47,12 +47,17 @@ Todos los tools pasan por `POST /agent/v1/rpc`. Tipos de args en JSON Schema / Z
 
 - **Scopes**: `read:budgets`
 - **Args**: `{ period?: string }` (ej. `'2026-08'`; alias gateway: `periodKey`)
+- **Nota**: solo presupuestos/límites por categoría (“Límites del mes”). **No** incluye gastos fijos (“Pagos del mes”) → usar `list_fixed_expenses`. `[]` si no hay límites en ese mes.
 
 ### `list_fixed_expenses`
 
 - **Scopes**: `read:budgets`
-- **Args**: `{ periodStart?: number; periodEnd?: number; limit?: number }`
-- **Returns**: `{ items, pendingTotal }` (misma semántica dashboard)
+- **Args**: `{ period?: string; periodStart?: number; periodEnd?: number; includePaid?: boolean; limit?: number }`
+  - `period` (`'YYYY-MM'`, alias `periodKey`) tiene prioridad sobre los timestamps; se resuelve al mes calendario America/Bogota (UTC-5). **Recomendado** para agentes.
+  - `periodStart`/`periodEnd` en epoch ms; el rango puede abarcar varios meses (máx. 366 días) y se evalúa **cada** mes tocado.
+  - `includePaid=true` añade los ya pagados (`isPaid: true`) y `paidTotal`. Default: solo pendientes.
+- **Returns**: `{ periodStart, periodEnd, periodKeys, pendingTotal, paidTotal?, items }`; cada item incluye `periodKey`, `dueDate`, `isOverdue`, `isPaid`. Sin `includePaid`, misma semántica que el dashboard “Si pagas fijos”.
+- **Diagnóstico**: si `items` viene vacío, revisar `periodKeys` en la respuesta (p. ej. `2024-09` indica timestamps con año equivocado).
 
 ### `list_credits`
 

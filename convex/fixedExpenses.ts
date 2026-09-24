@@ -149,9 +149,7 @@ export const listUpcomingForPeriod = query({
 			result.items.map(async (row) => {
 				const doc = await ctx.db.get(row.id);
 				if (!doc) return null;
-				const viewingPeriodKey = periodKeyFromTimestamp(periodStart);
-				const periodKey = doc.onlyPeriodKey ?? viewingPeriodKey;
-				const enriched = await enrichFixedExpense(ctx, doc, periodKey);
+				const enriched = await enrichFixedExpense(ctx, doc, row.periodKey);
 				return {
 					...enriched,
 					dueDate: row.dueDate,

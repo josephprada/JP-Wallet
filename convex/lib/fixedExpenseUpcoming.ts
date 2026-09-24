@@ -1,11 +1,14 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
-import { dueTimestampForPeriodKey } from "./fixedExpenses";
 import { hasValidPaymentTransaction } from "./fixedExpensePayments";
 import { appliesToPeriodKey } from "./fixedExpensePeriod";
-import { periodKeyFromTimestamp, periodKeyToMonthRange } from "./period";
+import { dueTimestampForPeriodKey } from "./fixedExpenses";
+import { periodKeyFromTimestamp } from "./period";
 
 type DbCtx = { db: QueryCtx["db"] | MutationCtx["db"] };
+
+/** Safety cap on months evaluated per call (guards heavy payment lookups). */
+export const MAX_UPCOMING_PERIOD_MONTHS = 24;
 
 export type UpcomingFixedExpenseRow = {
 	id: Id<"fixedExpenses">;
@@ -16,18 +19,50 @@ export type UpcomingFixedExpenseRow = {
 	dayOfMonth: number;
 	dueDate: number;
 	isOverdue: boolean;
+	/** Month (YYYY-MM) this occurrence belongs to. */
+	periodKey: string;
+	/** Always false unless `includePaid` was requested. */
+	isPaid: boolean;
 	onlyPeriodKey?: string;
 };
 
 export type UpcomingFixedExpensesResult = {
 	periodStart: number;
 	periodEnd: number;
+	/** Months (YYYY-MM) evaluated for this range. */
+	periodKeys: string[];
 	pendingTotal: number;
+	/** Sum of paid occurrences; only present with `includePaid`. */
+	paidTotal?: number;
 	items: UpcomingFixedExpenseRow[];
 };
 
 /**
+ * Every month key (YYYY-MM) touched by [periodStart, periodEnd], in order.
+ * Capped at MAX_UPCOMING_PERIOD_MONTHS.
+ */
+export function periodKeysInRange(
+	periodStart: number,
+	periodEnd: number,
+): string[] {
+	if (periodEnd < periodStart) return [];
+	const keys: string[] = [];
+	const cursor = new Date(periodStart);
+	cursor.setDate(1);
+	cursor.setHours(12, 0, 0, 0);
+	const lastKey = periodKeyFromTimestamp(periodEnd);
+	while (keys.length < MAX_UPCOMING_PERIOD_MONTHS) {
+		const key = periodKeyFromTimestamp(cursor.getTime());
+		keys.push(key);
+		if (key === lastKey) break;
+		cursor.setMonth(cursor.getMonth() + 1);
+	}
+	return keys;
+}
+
+/**
  * Shared pending-fixed logic for dashboard + MCP (ownership via userId).
+ * Evaluates every month the range touches (not only the month of periodStart).
  * `limit` only truncates `items`; `pendingTotal` is always the full sum.
  */
 export async function listUpcomingFixedExpensesForUser(
@@ -36,6 +71,7 @@ export async function listUpcomingFixedExpensesForUser(
 	periodStart: number,
 	periodEnd: number,
 	limit = 50,
+	options: { includePaid?: boolean } = {},
 ): Promise<UpcomingFixedExpensesResult> {
 	const items = await ctx.db
 		.query("fixedExpenses")
@@ -45,51 +81,40 @@ export async function listUpcomingFixedExpensesForUser(
 		.collect();
 
 	const now = Date.now();
-	const upcoming: UpcomingFixedExpenseRow[] = [];
+	const rows: UpcomingFixedExpenseRow[] = [];
 	let pendingTotal = 0;
-	const viewingPeriodKey = periodKeyFromTimestamp(periodStart);
+	let paidTotal = 0;
+	const periodKeys = periodKeysInRange(periodStart, periodEnd);
 
 	for (const item of items) {
-		if (item.onlyPeriodKey) {
-			const { start, end } = periodKeyToMonthRange(item.onlyPeriodKey);
-			if (end < periodStart || start > periodEnd) continue;
-			if (item.skippedPeriodKey === item.onlyPeriodKey) continue;
-			const dueTs = dueTimestampForPeriodKey(
-				item.dayOfMonth,
-				item.onlyPeriodKey,
-			);
+		for (const periodKey of periodKeys) {
+			if (!appliesToPeriodKey(item, periodKey)) continue;
+			if (item.skippedPeriodKey === periodKey) continue;
+
+			const dueTs = dueTimestampForPeriodKey(item.dayOfMonth, periodKey);
 			if (dueTs < periodStart || dueTs > periodEnd) continue;
-			if (await hasValidPaymentTransaction(ctx, item, item.onlyPeriodKey)) {
-				continue;
+
+			const isPaid = await hasValidPaymentTransaction(ctx, item, periodKey);
+			if (isPaid) {
+				if (!options.includePaid) continue;
+				paidTotal += item.amount;
+			} else {
+				pendingTotal += item.amount;
 			}
-
-			pendingTotal += item.amount;
-			upcoming.push(await toRow(ctx, item, dueTs, now));
-			continue;
+			rows.push(await toRow(ctx, item, dueTs, now, periodKey, isPaid));
 		}
-
-		if (!appliesToPeriodKey(item, viewingPeriodKey)) continue;
-		if (item.skippedPeriodKey === viewingPeriodKey) continue;
-
-		const dueTs = dueTimestampForPeriodKey(item.dayOfMonth, viewingPeriodKey);
-		if (dueTs < periodStart || dueTs > periodEnd) continue;
-
-		if (await hasValidPaymentTransaction(ctx, item, viewingPeriodKey)) {
-			continue;
-		}
-
-		pendingTotal += item.amount;
-		upcoming.push(await toRow(ctx, item, dueTs, now));
 	}
 
-	upcoming.sort((a, b) => a.dueDate - b.dueDate);
+	rows.sort((a, b) => a.dueDate - b.dueDate);
 	const capped = Math.max(1, Math.min(limit, 100));
 
 	return {
 		periodStart,
 		periodEnd,
+		periodKeys,
 		pendingTotal,
-		items: upcoming.slice(0, capped),
+		...(options.includePaid ? { paidTotal } : {}),
+		items: rows.slice(0, capped),
 	};
 }
 
@@ -98,6 +123,8 @@ async function toRow(
 	item: Doc<"fixedExpenses">,
 	dueTs: number,
 	now: number,
+	periodKey: string,
+	isPaid: boolean,
 ): Promise<UpcomingFixedExpenseRow> {
 	const category = await ctx.db.get(item.categoryId);
 	return {
@@ -108,7 +135,9 @@ async function toRow(
 		categoryName: category?.name ?? "Categoría",
 		dayOfMonth: item.dayOfMonth,
 		dueDate: dueTs,
-		isOverdue: dueTs < now,
+		isOverdue: !isPaid && dueTs < now,
+		periodKey,
+		isPaid,
 		onlyPeriodKey: item.onlyPeriodKey,
 	};
 }

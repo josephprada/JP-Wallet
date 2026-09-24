@@ -88,12 +88,14 @@ export function buildReadToolDefs(
 		makeRpcTool({
 			name: "list_budgets",
 			description:
-				"Lista presupuestos, opcionalmente filtrados por período. Requiere scope read:budgets.",
+				"Lista presupuestos (límites de gasto por categoría, pestaña “Límites del mes”) con gastado/restante. NO incluye gastos fijos ni “Pagos del mes”: para eso usa list_fixed_expenses. Devuelve [] si no hay límites creados para ese mes. Requiere scope read:budgets.",
 			inputShape: {
 				period: z
 					.string()
 					.optional()
-					.describe("Período a filtrar (ej. '2026-07')."),
+					.describe(
+						"Mes 'YYYY-MM' (ej. '2026-10'). Default: mes actual (America/Bogota).",
+					),
 			},
 			getToken,
 			siteUrl,
@@ -101,16 +103,32 @@ export function buildReadToolDefs(
 		makeRpcTool({
 			name: "list_fixed_expenses",
 			description:
-				"Lista gastos fijos pendientes en un período y el pendingTotal (suma completa). Misma semántica que el dashboard “Si pagas fijos”. Requiere scope read:budgets.",
+				"Lista gastos fijos (“Pagos del mes”) de un período y el pendingTotal. Por defecto solo pendientes (misma semántica que el dashboard “Si pagas fijos”); con includePaid=true incluye también los ya pagados (isPaid) y paidTotal. Preferir `period: 'YYYY-MM'` a timestamps: el calendario es America/Bogota (UTC-5). La respuesta incluye periodKeys evaluados para verificar el rango. Requiere scope read:budgets.",
 			inputShape: {
+				period: z
+					.string()
+					.optional()
+					.describe(
+						"Mes 'YYYY-MM' (ej. '2026-10'). Si se envía, ignora periodStart/periodEnd.",
+					),
 				periodStart: z
 					.number()
 					.optional()
-					.describe("Inicio del período (epoch ms). Default: mes actual."),
+					.describe(
+						"Inicio del período (epoch ms, America/Bogota). Default: mes actual. Verifica el año.",
+					),
 				periodEnd: z
 					.number()
 					.optional()
-					.describe("Fin del período (epoch ms). Default: mes actual."),
+					.describe(
+						"Fin del período (epoch ms). Default: mes actual. Rango máx. 366 días; puede abarcar varios meses.",
+					),
+				includePaid: z
+					.boolean()
+					.optional()
+					.describe(
+						"Incluir gastos fijos ya pagados en el período (default false).",
+					),
 				limit: z
 					.number()
 					.optional()

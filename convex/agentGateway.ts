@@ -170,6 +170,20 @@ function bogotaMonthBounds(referenceMs: number = Date.now()): {
 	return bogotaPeriodBounds("month", referenceMs);
 }
 
+/** America/Bogota calendar-month bounds (absolute ms) for a 'YYYY-MM' key. */
+function bogotaMonthBoundsForPeriodKey(periodKey: string): {
+	start: number;
+	end: number;
+} {
+	const { start, end } = periodKeyToMonthRange(periodKey);
+	return {
+		start: start - BOGOTA_OFFSET_MINUTES * 60_000,
+		end: end - BOGOTA_OFFSET_MINUTES * 60_000,
+	};
+}
+
+const MAX_FIXED_EXPENSE_RANGE_MS = 366 * 24 * 60 * 60 * 1000;
+
 /** Period bounds in absolute ms for America/Bogota wall-clock calendar. */
 function bogotaPeriodBounds(
 	grouping: GroupingId,
@@ -440,15 +454,32 @@ async function toolListFixedExpenses(
 	userId: Id<"users">,
 	args: Record<string, unknown>,
 ) {
-	const bounds = bogotaMonthBounds();
-	const periodStart = asOptionalNumber(args.periodStart) ?? bounds.start;
-	const periodEnd = asOptionalNumber(args.periodEnd) ?? bounds.end;
+	// `period` ('YYYY-MM') wins over raw timestamps: agents often compute epoch
+	// ms with the wrong year or in UTC instead of America/Bogota.
+	const rawPeriodKey =
+		asOptionalString(args.period) ?? asOptionalString(args.periodKey);
+	const bounds = rawPeriodKey
+		? bogotaMonthBoundsForPeriodKey(validatePeriodKey(rawPeriodKey))
+		: bogotaMonthBounds();
+	const periodStart = rawPeriodKey
+		? bounds.start
+		: (asOptionalNumber(args.periodStart) ?? bounds.start);
+	const periodEnd = rawPeriodKey
+		? bounds.end
+		: (asOptionalNumber(args.periodEnd) ?? bounds.end);
 	const limit = asOptionalNumber(args.limit) ?? 50;
+	const includePaid = asOptionalBoolean(args.includePaid) ?? false;
 
 	if (periodEnd < periodStart) {
 		throw new AgentGatewayError(
 			"validation",
 			"periodEnd must be >= periodStart",
+		);
+	}
+	if (periodEnd - periodStart > MAX_FIXED_EXPENSE_RANGE_MS) {
+		throw new AgentGatewayError(
+			"validation",
+			"Range too large: max 366 days",
 		);
 	}
 
@@ -458,6 +489,7 @@ async function toolListFixedExpenses(
 		periodStart,
 		periodEnd,
 		limit,
+		{ includePaid },
 	);
 }
 
