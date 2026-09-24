@@ -127,10 +127,12 @@ jobs:
           port: ${{ secrets.VPS_SSH_PORT }}
           username: ${{ secrets.VPS_SSH_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          source: "apps/mcp-server/*"
-          target: "/opt/jp-wallet/mcp-server"
+          # Staging propiedad del usuario deploy: /opt/jp-wallet/mcp-server es de
+          # jpwallet (ACL rwX para deploy), y tar no puede hacer chmod/utime allí.
+          source: "apps/mcp-server/src,apps/mcp-server/package.json,apps/mcp-server/tsconfig.json"
+          target: "/tmp/jp-wallet-mcp-release"
           strip_components: 2
-          overwrite: true
+          rm: true
 
       - name: Restart MCP on VPS
         continue-on-error: true
@@ -143,7 +145,13 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             set -euo pipefail
-            cd /opt/jp-wallet/mcp-server
+            STAGING=/tmp/jp-wallet-mcp-release
+            MCP_ROOT=/opt/jp-wallet/mcp-server
+            # Copia solo contenido (sin chmod/chown/utime): lo que permite la ACL de deploy.
+            cd "$STAGING"
+            find . -type d -exec mkdir -p "$MCP_ROOT/{}" \;
+            find . -type f -exec sh -c 'cat "$1" > "$2/$1"' _ {} "$MCP_ROOT" \;
+            cd "$MCP_ROOT"
             bun install 2>/dev/null || true
             sudo systemctl restart jp-wallet-mcp
             curl -fsS http://127.0.0.1:3100/healthz
