@@ -154,6 +154,14 @@ jobs:
             cd "$MCP_ROOT"
             bun install 2>/dev/null || true
             sudo systemctl restart jp-wallet-mcp
-            curl -fsS http://127.0.0.1:3100/healthz
-            echo
-            echo "MCP restart OK"
+            # Bun tarda unos segundos en abrir el puerto tras el restart.
+            for i in $(seq 1 15); do
+              if curl -fsS http://127.0.0.1:3100/healthz; then
+                echo
+                echo "MCP restart OK"
+                exit 0
+              fi
+              sleep 2
+            done
+            systemctl status jp-wallet-mcp --no-pager -l || true
+            exit 1
