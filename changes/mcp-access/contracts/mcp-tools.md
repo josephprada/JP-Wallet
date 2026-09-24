@@ -56,8 +56,8 @@ Todos los tools pasan por `POST /agent/v1/rpc`. Tipos de args en JSON Schema / Z
   - `period` (`'YYYY-MM'`, alias `periodKey`) tiene prioridad sobre los timestamps; se resuelve al mes calendario America/Bogota (UTC-5). **Recomendado** para agentes.
   - `periodStart`/`periodEnd` en epoch ms; el rango puede abarcar varios meses (máx. 366 días) y se evalúa **cada** mes tocado.
   - `includePaid=true` añade los ya pagados (`isPaid: true`) y `paidTotal`. Default: solo pendientes.
-- **Returns**: `{ periodStart, periodEnd, periodKeys, pendingTotal, paidTotal?, items }`; cada item incluye `periodKey`, `dueDate`, `isOverdue`, `isPaid`. Sin `includePaid`, misma semántica que el dashboard “Si pagas fijos”.
-- **Diagnóstico**: si `items` viene vacío, revisar `periodKeys` en la respuesta (p. ej. `2024-09` indica timestamps con año equivocado).
+- **Returns**: `{ periodStart, periodEnd, periodKeys, currentPeriodKey, pendingTotal, paidTotal?, hint?, items }`; cada item incluye `periodKey`, `dueDate`, `isOverdue`, `isPaid`. Sin `includePaid`, misma semántica que el dashboard “Si pagas fijos”.
+- **Diagnóstico**: si `items` viene vacío, revisar `periodKeys` frente a `currentPeriodKey` (p. ej. `2024-09` con `currentPeriodKey: 2026-09` indica timestamps con año equivocado). Si el rango es anterior a todos los gastos fijos, la respuesta trae `hint`.
 
 ### `list_credits`
 

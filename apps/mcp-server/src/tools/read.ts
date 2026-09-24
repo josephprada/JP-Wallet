@@ -103,7 +103,7 @@ export function buildReadToolDefs(
 		makeRpcTool({
 			name: "list_fixed_expenses",
 			description:
-				"Lista gastos fijos (“Pagos del mes”) de un período y el pendingTotal. Por defecto solo pendientes (misma semántica que el dashboard “Si pagas fijos”); con includePaid=true incluye también los ya pagados (isPaid) y paidTotal. Preferir `period: 'YYYY-MM'` a timestamps: el calendario es America/Bogota (UTC-5). La respuesta incluye periodKeys evaluados para verificar el rango. Requiere scope read:budgets.",
+				"Lista gastos fijos (“Pagos del mes”) de un período y el pendingTotal. Por defecto solo pendientes (misma semántica que el dashboard “Si pagas fijos”); con includePaid=true incluye también los ya pagados (isPaid) y paidTotal. USA `period: 'YYYY-MM'` (ej. '2026-10') en vez de timestamps: evita errores de año y zona horaria (calendario America/Bogota, UTC-5). La respuesta incluye periodKeys (meses evaluados), currentPeriodKey (mes actual del servidor) y, si el rango es anterior a todos los gastos fijos, un hint. Requiere scope read:budgets.",
 			inputShape: {
 				period: z
 					.string()

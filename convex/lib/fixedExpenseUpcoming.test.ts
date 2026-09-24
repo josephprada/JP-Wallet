@@ -134,6 +134,7 @@ describe("listUpcomingFixedExpensesForUser", () => {
 		);
 		expect(result.items).toHaveLength(5);
 		expect(result.pendingTotal).toBe(816_000);
+		expect(result.hint).toBeUndefined();
 		expect(result.items.every((i) => i.periodKey === "2026-10")).toBe(true);
 		expect(result.items.at(-1)?.name).toBe("Licencia de claude");
 	});
@@ -182,6 +183,8 @@ describe("listUpcomingFixedExpensesForUser", () => {
 		);
 		expect(result.periodKeys).toEqual(["2024-09", "2024-10"]);
 		expect(result.items).toEqual([]);
+		expect(result.hint).toContain("¿Año equivocado");
+		expect(result.hint).toContain("2026-08");
 	});
 
 	test("paid expenses are excluded by default and included with includePaid", async () => {

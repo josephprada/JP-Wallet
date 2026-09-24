@@ -483,7 +483,7 @@ async function toolListFixedExpenses(
 		);
 	}
 
-	return listUpcomingFixedExpensesForUser(
+	const result = await listUpcomingFixedExpensesForUser(
 		ctx,
 		userId,
 		periodStart,
@@ -491,6 +491,11 @@ async function toolListFixedExpenses(
 		limit,
 		{ includePaid },
 	);
+	// Lets agents re-anchor "today" (they often assume a stale year).
+	return {
+		...result,
+		currentPeriodKey: periodKeyFromTimestamp(bogotaMonthBounds().start),
+	};
 }
 
 async function toolListCredits(

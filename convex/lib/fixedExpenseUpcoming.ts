@@ -34,8 +34,22 @@ export type UpcomingFixedExpensesResult = {
 	pendingTotal: number;
 	/** Sum of paid occurrences; only present with `includePaid`. */
 	paidTotal?: number;
+	/** Set when the range predates every active fixed expense (likely wrong year). */
+	hint?: string;
 	items: UpcomingFixedExpenseRow[];
 };
+
+/** Earliest month (YYYY-MM) any of these fixed expenses can apply to. */
+function earliestApplicablePeriodKey(
+	items: Pick<Doc<"fixedExpenses">, "onlyPeriodKey" | "createdAt">[],
+): string | undefined {
+	let earliest: string | undefined;
+	for (const item of items) {
+		const key = item.onlyPeriodKey ?? periodKeyFromTimestamp(item.createdAt);
+		if (earliest === undefined || key < earliest) earliest = key;
+	}
+	return earliest;
+}
 
 /**
  * Every month key (YYYY-MM) touched by [periodStart, periodEnd], in order.
@@ -108,12 +122,20 @@ export async function listUpcomingFixedExpensesForUser(
 	rows.sort((a, b) => a.dueDate - b.dueDate);
 	const capped = Math.max(1, Math.min(limit, 100));
 
+	const earliestKey = earliestApplicablePeriodKey(items);
+	const lastKey = periodKeys.at(-1);
+	const hint =
+		rows.length === 0 && earliestKey && lastKey && lastKey < earliestKey
+			? `El rango (${periodKeys.join(", ")}) es anterior a todos tus gastos fijos (desde ${earliestKey}). ¿Año equivocado en los timestamps? Usa period: 'YYYY-MM'.`
+			: undefined;
+
 	return {
 		periodStart,
 		periodEnd,
 		periodKeys,
 		pendingTotal,
 		...(options.includePaid ? { paidTotal } : {}),
+		...(hint ? { hint } : {}),
 		items: rows.slice(0, capped),
 	};
 }
