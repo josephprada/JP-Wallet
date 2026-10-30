@@ -56,7 +56,12 @@ export function TransactionRow({
 					showNotesInTitle ? null : tx.notes?.trim() || null,
 				];
 
-	const metaLine = metaParts.filter(Boolean).join(" · ");
+	const metaLine = [
+		...metaParts,
+		tx.excludedFromPersonalFinance ? "Excluida de finanzas" : null,
+	]
+		.filter(Boolean)
+		.join(" · ");
 
 	return (
 		<li

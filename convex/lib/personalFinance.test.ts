@@ -5,6 +5,7 @@ import {
 	isAccountExcludedFromPersonalFinance,
 	personalFinanceExpenseAmount,
 	transferToIsolatedCountsAsExpense,
+	visibleInMovementsHistory,
 } from "./personalFinance";
 
 function account(
@@ -153,5 +154,45 @@ describe("transferToIsolatedCountsAsExpense", () => {
 				excluded,
 			),
 		).toBe(false);
+	});
+});
+
+describe("visibleInMovementsHistory", () => {
+	const excluded = new Set<Id<"accounts">>(["isolated" as Id<"accounts">]);
+
+	it("shows expenses from excluded accounts so they can be edited", () => {
+		expect(
+			visibleInMovementsHistory(
+				tx({ accountId: "isolated" as Id<"accounts"> }),
+				excluded,
+				{ includeExcludedAccounts: true },
+			),
+		).toBe(true);
+	});
+
+	it("keeps excluded accounts out when not requested (reports)", () => {
+		expect(
+			visibleInMovementsHistory(
+				tx({ accountId: "isolated" as Id<"accounts"> }),
+				excluded,
+				{ includeExcludedAccounts: false },
+			),
+		).toBe(false);
+	});
+
+	it("still hides credit escrow fund movements", () => {
+		expect(
+			visibleInMovementsHistory(tx({ isCreditFundMovement: true }), excluded, {
+				includeExcludedAccounts: true,
+			}),
+		).toBe(false);
+	});
+
+	it("shows regular personal movements", () => {
+		expect(
+			visibleInMovementsHistory(tx({}), excluded, {
+				includeExcludedAccounts: false,
+			}),
+		).toBe(true);
 	});
 });

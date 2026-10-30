@@ -37,6 +37,7 @@ export function TransactionsRoute() {
 		() => ({
 			dateFrom: range.start,
 			dateTo: range.end,
+			includeExcludedAccounts: true,
 			...(search.trim() ? { search: search.trim() } : {}),
 		}),
 		[range.start, range.end, search],

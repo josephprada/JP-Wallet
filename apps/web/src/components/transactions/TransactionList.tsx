@@ -19,6 +19,8 @@ export type TransactionItem = {
 	categoryColor?: string;
 	destinationName?: string;
 	notes?: string;
+	/** Cuenta excluida de finanzas personales: visible pero fuera de totales. */
+	excludedFromPersonalFinance?: boolean;
 };
 
 type TransactionListProps = {
@@ -303,6 +305,9 @@ export function TransactionList({
 										{tx.type === "transfer"
 											? `${tx.accountName} → ${tx.toAccountName ?? ""}`
 											: tx.accountName}
+										{tx.excludedFromPersonalFinance ? (
+											<span className="tx-table__note"> · Excluida</span>
+										) : null}
 									</td>
 									<td>{formatShortDate(tx.date)}</td>
 									<td className="tx-table__amount-col">
