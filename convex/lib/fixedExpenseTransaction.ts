@@ -3,6 +3,8 @@ import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { requireAccountOwnership, requireCategoryOwnership } from "./auth";
 import { getBalanceDeltas } from "./balance";
+import { createAndRegisterCreditPayment } from "./creditPaymentRegistration";
+import { pickInstallmentForPeriod } from "./creditFixedExpenseSync";
 import { hasValidPaymentTransaction } from "./fixedExpensePayments";
 import { appliesToPeriodKey, assertAppliesToPeriodKey } from "./fixedExpensePeriod";
 import {
@@ -48,6 +50,16 @@ export async function registerFixedExpensePayment(
 	const account = await requireAccountOwnership(ctx, userId, params.accountId);
 	if (account.archived) {
 		throw new Error("Account is archived");
+	}
+
+	if (item.linkedCreditId) {
+		return await payLinkedCreditInstallment(ctx, userId, {
+			creditId: item.linkedCreditId,
+			accountId: params.accountId,
+			date: params.date,
+			periodKey: params.periodKey,
+			notes: params.notes,
+		});
 	}
 
 	const category = await requireCategoryOwnership(
@@ -157,6 +169,50 @@ export async function registerFixedExpensePayment(
 	}
 
 	return transactionId;
+}
+
+/**
+ * Gasto fijo vinculado a un crédito: el pago se registra como pago de la cuota
+ * (marca la cuota, baja el saldo del crédito y, vía registerCreditPayment,
+ * marca este gasto fijo como pagado). El monto es el de la cuota real.
+ */
+async function payLinkedCreditInstallment(
+	ctx: MutationCtx,
+	userId: Id<"users">,
+	params: {
+		creditId: Id<"credits">;
+		accountId: Id<"accounts">;
+		date: number;
+		periodKey: string;
+		notes?: string;
+	},
+): Promise<Id<"transactions">> {
+	const credit = await ctx.db.get(params.creditId);
+	if (!credit || credit.userId !== userId) {
+		throw new Error("Credit not found");
+	}
+	if (!credit.paymentCategoryId) {
+		throw new Error("Credit has no payment category");
+	}
+
+	const payments = await ctx.db
+		.query("creditPayments")
+		.withIndex("by_credit", (q) => q.eq("creditId", params.creditId))
+		.collect();
+	const installment = pickInstallmentForPeriod(payments, params.periodKey);
+	if (!installment) {
+		throw new Error(
+			"No hay cuotas pendientes en el calendario del crédito para registrar este pago",
+		);
+	}
+
+	return await createAndRegisterCreditPayment(ctx, userId, {
+		paymentId: installment._id,
+		paidDate: params.date,
+		accountId: params.accountId,
+		categoryId: credit.paymentCategoryId,
+		notes: `Cuota #${installment.installmentNumber} — ${credit.name}`,
+	});
 }
 
 export async function listUnpaidFixedExpensesForCategory(

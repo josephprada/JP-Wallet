@@ -3,6 +3,10 @@ import type { MutationCtx } from "../_generated/server";
 import { requireAccountOwnership, requireCreditOwnership } from "./auth";
 import { createCreditPaymentCategory } from "./creditCategories";
 import { markOverdueStatus } from "./creditDates";
+import {
+	clearLinkedFixedExpenseForCreditTransaction,
+	markLinkedFixedExpensePaidForCreditPayment,
+} from "./creditFixedExpense";
 import { insertCreditLinkedTransaction } from "./creditTransactions";
 import { validatePositiveCopAmount } from "./validators";
 
@@ -52,6 +56,13 @@ export async function registerCreditPayment(
 		status: newBalance <= 0 ? "paid_off" : credit.status,
 		updatedAt: now,
 	});
+
+	await markLinkedFixedExpensePaidForCreditPayment(
+		ctx,
+		credit,
+		payment,
+		params.transactionId,
+	);
 }
 
 export async function createAndRegisterCreditPayment(
@@ -148,6 +159,8 @@ export async function revertCreditPaymentForTransaction(
 		status: "active",
 		updatedAt: now,
 	});
+
+	await clearLinkedFixedExpenseForCreditTransaction(ctx, credit, transactionId);
 }
 
 export function resolveCreditPaymentAccountId(credit: {

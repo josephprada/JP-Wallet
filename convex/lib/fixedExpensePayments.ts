@@ -47,12 +47,36 @@ export async function findMatchingPaymentTransaction(
 	return null;
 }
 
+/** Gasto fijo vinculado a crédito: pagado si la cuota que vence ese mes está pagada. */
+async function hasPaidLinkedCreditInstallment(
+	ctx: { db: QueryCtx["db"] },
+	creditId: Id<"credits">,
+	periodKey: string,
+): Promise<boolean> {
+	const payments = await ctx.db
+		.query("creditPayments")
+		.withIndex("by_credit", (q) => q.eq("creditId", creditId))
+		.collect();
+	return payments.some(
+		(payment) =>
+			payment.status === "paid" &&
+			periodKeyFromTimestamp(payment.dueDate) === periodKey,
+	);
+}
+
 export async function hasValidPaymentTransaction(
 	ctx: { db: QueryCtx["db"] },
 	item: Doc<"fixedExpenses">,
 	periodKey: string,
 ): Promise<boolean> {
 	if (item.lastPaidPeriodKey === periodKey) return true;
+
+	if (
+		item.linkedCreditId &&
+		(await hasPaidLinkedCreditInstallment(ctx, item.linkedCreditId, periodKey))
+	) {
+		return true;
+	}
 
 	if (item.lastPaidTransactionId) {
 		const linked = await ctx.db.get(item.lastPaidTransactionId);
