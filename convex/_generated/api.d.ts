@@ -24,6 +24,7 @@ import type * as creditPayments from "../creditPayments.js";
 import type * as credits from "../credits.js";
 import type * as crons from "../crons.js";
 import type * as dashboard from "../dashboard.js";
+import type * as devLogin from "../devLogin.js";
 import type * as fixedExpenseContext from "../fixedExpenseContext.js";
 import type * as fixedExpenses from "../fixedExpenses.js";
 import type * as http from "../http.js";
@@ -100,6 +101,7 @@ declare const fullApi: ApiFromModules<{
   credits: typeof credits;
   crons: typeof crons;
   dashboard: typeof dashboard;
+  devLogin: typeof devLogin;
   fixedExpenseContext: typeof fixedExpenseContext;
   fixedExpenses: typeof fixedExpenses;
   http: typeof http;
