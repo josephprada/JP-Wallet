@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { computeBalanceAdjustment } from "./lib/accountBalanceAdjustment";
 import { compareAccounts } from "./lib/accounts";
 import {
 	requireAccountOwnership,
@@ -7,6 +8,7 @@ import {
 	requireUserId,
 } from "./lib/auth";
 import { syncDisbursementAccountIsolation } from "./lib/personalFinance";
+import { resolveUserPreferences } from "./lib/preferences";
 import {
 	accountTypeValidator,
 	validateCopAmount,
@@ -96,6 +98,51 @@ export const update = mutation({
 			...(excludeFromPersonalFinance !== undefined
 				? { excludeFromPersonalFinance }
 				: {}),
+			updatedAt: Date.now(),
+		});
+
+		return null;
+	},
+});
+
+/**
+ * Corrección de emergencia del saldo (descuadres por error humano).
+ * Solo disponible si el usuario activó el modo en Ajustes. No crea
+ * movimientos: ajusta `initialBalance` para que el historial siga cuadrando.
+ */
+export const adjustBalance = mutation({
+	args: {
+		accountId: v.id("accounts"),
+		balance: v.number(),
+	},
+	handler: async (ctx, { accountId, balance }) => {
+		const userId = await requireUserId(ctx);
+		const account = await requireAccountOwnership(ctx, userId, accountId);
+		if (account.archived) {
+			throw new Error("Account is archived");
+		}
+
+		const prefs = await ctx.db
+			.query("userPreferences")
+			.withIndex("by_user", (q) => q.eq("userId", userId))
+			.unique();
+		if (!resolveUserPreferences(prefs).balanceEditEnabled) {
+			throw new Error(
+				"Activa la edición de saldos de emergencia en Ajustes para corregir saldos",
+			);
+		}
+
+		// Puede ser negativo (tarjetas de crédito o sobregiros), pero siempre COP entero.
+		if (!Number.isInteger(balance)) {
+			throw new Error("balance must be an integer");
+		}
+		const nextBalance = balance;
+		const adjustment = computeBalanceAdjustment(account, nextBalance);
+		if (adjustment.delta === 0) return null;
+
+		await ctx.db.patch(accountId, {
+			balance: adjustment.balance,
+			initialBalance: adjustment.initialBalance,
 			updatedAt: Date.now(),
 		});
 

@@ -19,6 +19,9 @@ export function AccountsRoute() {
 		useQuery(api.accounts.list, { includeArchived: false }) ?? [];
 	const createAccount = useMutation(api.accounts.create);
 	const updateAccount = useMutation(api.accounts.update);
+	const adjustBalance = useMutation(api.accounts.adjustBalance);
+	const preferences = useQuery(api.userPreferences.get);
+	const balanceEditEnabled = preferences?.balanceEditEnabled ?? false;
 	const archiveAccount = useMutation(api.accounts.archive);
 	const reorderAccounts = useMutation(api.accounts.reorder);
 
@@ -61,15 +64,29 @@ export function AccountsRoute() {
 		}
 	};
 
-	const handleUpdate = async (values: {
+	const handleUpdate = async ({
+		currentBalance,
+		...values
+	}: {
 		name: string;
 		type: AccountType;
+		currentBalance?: number;
 		excludeFromPersonalFinance: boolean;
 	}) => {
 		if (!editing) return;
 		setLoading(true);
 		try {
 			await updateAccount({ accountId: editing._id, ...values });
+			if (
+				balanceEditEnabled &&
+				currentBalance !== undefined &&
+				currentBalance !== editing.balance
+			) {
+				await adjustBalance({
+					accountId: editing._id,
+					balance: currentBalance,
+				});
+			}
 			closeModal();
 		} finally {
 			setLoading(false);
@@ -179,6 +196,11 @@ export function AccountsRoute() {
 					<AccountForm
 						isEdit
 						loading={loading}
+						balanceEdit={
+							balanceEditEnabled
+								? { currentBalance: editing.balance }
+								: undefined
+						}
 						initial={{
 							name: editing.name,
 							type: editing.type,

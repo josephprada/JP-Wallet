@@ -2,6 +2,7 @@ import { BrandLogoMark } from "@app/components/brand/BrandLogoMark";
 import { PushPermissionBanner } from "@app/components/notifications/PushPermissionBanner";
 import { ApiAccessSection } from "@app/components/settings/ApiAccessSection";
 import { AppearanceSection } from "@app/components/settings/AppearanceSection";
+import { BalanceEditToggle } from "@app/components/settings/BalanceEditToggle";
 import { GroupingPicker } from "@app/components/settings/GroupingPicker";
 import { LanguagePicker } from "@app/components/settings/LanguagePicker";
 import { NotificationsToggle } from "@app/components/settings/NotificationsToggle";
@@ -81,6 +82,15 @@ export function SettingsRoute() {
 				</section>
 
 				<ApiAccessSection />
+
+				<section className="settings-section">
+					<h2 className="settings-section__title">Emergencia</h2>
+					<div className="settings-card glass">
+						<div className="settings-row glass">
+							<BalanceEditToggle />
+						</div>
+					</div>
+				</section>
 
 				{session ? (
 					<div

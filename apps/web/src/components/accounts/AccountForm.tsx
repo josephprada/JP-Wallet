@@ -15,10 +15,13 @@ type AccountFormProps = {
 	initial?: Partial<AccountFormValues>;
 	isEdit?: boolean;
 	loading?: boolean;
+	/** Modo emergencia (Ajustes): permite corregir el saldo actual al editar. */
+	balanceEdit?: { currentBalance: number };
 	onSubmit: (values: {
 		name: string;
 		type: AccountType;
 		initialBalance?: number;
+		currentBalance?: number;
 		excludeFromPersonalFinance: boolean;
 	}) => void;
 	onCancel: () => void;
@@ -37,6 +40,7 @@ export function AccountForm({
 	initial,
 	isEdit = false,
 	loading = false,
+	balanceEdit,
 	onSubmit,
 	onCancel,
 	onDelete,
@@ -53,6 +57,12 @@ export function AccountForm({
 			initial?.excludeFromPersonalFinance ??
 			defaultValues.excludeFromPersonalFinance,
 	}));
+	const [currentBalance, setCurrentBalance] = useState(() =>
+		balanceEdit ? formatCOPInput(Math.abs(balanceEdit.currentBalance)) : "",
+	);
+	const [balanceNegative, setBalanceNegative] = useState(
+		() => (balanceEdit?.currentBalance ?? 0) < 0,
+	);
 	const [errors, setErrors] = useState<Record<string, string>>({});
 	const nameErrorId = useId();
 
@@ -65,6 +75,9 @@ export function AccountForm({
 				next.initialBalance = "Ingresa un saldo inicial válido";
 			}
 		}
+		if (isEdit && balanceEdit && parseCOPInput(currentBalance) === null) {
+			next.currentBalance = "Ingresa un saldo válido";
+		}
 		setErrors(next);
 		return Object.keys(next).length === 0;
 	};
@@ -74,10 +87,16 @@ export function AccountForm({
 		if (!validate()) return;
 
 		if (isEdit) {
+			const parsedBalance = balanceEdit ? parseCOPInput(currentBalance) : null;
 			onSubmit({
 				name: values.name.trim(),
 				type: values.type,
 				excludeFromPersonalFinance: values.excludeFromPersonalFinance,
+				...(parsedBalance !== null
+					? {
+							currentBalance: balanceNegative ? -parsedBalance : parsedBalance,
+						}
+					: {}),
 			});
 			return;
 		}
@@ -133,6 +152,27 @@ export function AccountForm({
 					/>
 					<FieldError message={errors.initialBalance} />
 				</>
+			) : null}
+
+			{isEdit && balanceEdit ? (
+				<div className="credit-form-check">
+					<CurrencyInput
+						label="Saldo actual (emergencia)"
+						value={currentBalance}
+						onChange={setCurrentBalance}
+						aria-invalid={Boolean(errors.currentBalance)}
+					/>
+					<FieldError message={errors.currentBalance} />
+					<Checkbox
+						label="Saldo negativo (sobregiro o deuda)"
+						checked={balanceNegative}
+						onChange={setBalanceNegative}
+					/>
+					<p className="tx-form__hint">
+						Corrige descuadres sin crear movimientos: no afecta ingresos ni
+						gastos del mes.
+					</p>
+				</div>
 			) : null}
 
 			<div className="credit-form-check">

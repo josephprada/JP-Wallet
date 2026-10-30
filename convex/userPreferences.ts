@@ -58,6 +58,7 @@ export const update = mutation({
 		notificationsEnabled: v.optional(v.boolean()),
 		reportEmailEnabled: v.optional(v.boolean()),
 		pushEnabled: v.optional(v.boolean()),
+		balanceEditEnabled: v.optional(v.boolean()),
 	},
 	handler: async (ctx, args) => {
 		const userId = await getAuthUserId(ctx);

@@ -77,6 +77,8 @@ export default defineSchema({
 		notificationsEnabled: v.optional(v.boolean()),
 		reportEmailEnabled: v.optional(v.boolean()),
 		pushEnabled: v.optional(v.boolean()),
+		/** Modo emergencia: permite corregir manualmente el saldo de las cuentas. */
+		balanceEditEnabled: v.optional(v.boolean()),
 		updatedAt: v.number(),
 	}).index("by_user", ["userId"]),
 
