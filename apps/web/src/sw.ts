@@ -23,12 +23,13 @@ async function hasForegroundClient(): Promise<boolean> {
 
 self.addEventListener("push", (event) => {
 	const data = event.data?.json() as
-		| { title?: string; body?: string; url?: string }
+		| { title?: string; body?: string; url?: string; force?: boolean }
 		| undefined;
 	event.waitUntil(
 		(async () => {
-			if (await hasForegroundClient()) {
-				// App visible: in-app toast covers the user; skip OS tray spam.
+			// App visible: in-app toast covers the user; skip OS tray spam.
+			// `force` (push de prueba) se muestra siempre: se dispara con la app abierta.
+			if (!data?.force && (await hasForegroundClient())) {
 				return;
 			}
 			await self.registration.showNotification(data?.title ?? "JP-WALLET", {
