@@ -24,6 +24,7 @@ import { registerFixedExpensePayment } from "./lib/fixedExpenseTransaction";
 import { periodKeyFromTimestamp } from "./lib/period";
 import {
 	countsForPersonalFinance,
+	visibleInMovementsHistory,
 	excludedPersonalFinanceAccountIds,
 } from "./lib/personalFinance";
 import { revertSavingsContributionForTransaction } from "./lib/savingsGoalFixedExpense";
@@ -53,6 +54,8 @@ export type TransactionListItem = {
 	categoryIcon: string;
 	categoryColor: string;
 	destinationName?: string;
+	/** Movimiento de una cuenta excluida: visible en historial, fuera de totales. */
+	excludedFromPersonalFinance?: boolean;
 	sortOrder?: number;
 	createdAt: number;
 	updatedAt: number;
@@ -168,6 +171,8 @@ export const list = query({
 		search: v.optional(v.string()),
 		limit: v.optional(v.number()),
 		includeCreditMovements: v.optional(v.boolean()),
+		/** Historial: incluir movimientos de cuentas excluidas de finanzas personales. */
+		includeExcludedAccounts: v.optional(v.boolean()),
 		creditId: v.optional(v.id("credits")),
 	},
 	handler: async (ctx, args) => {
@@ -184,8 +189,11 @@ export const list = query({
 		);
 		const includeCredit = args.includeCreditMovements ?? false;
 		if (!includeCredit && !args.creditId) {
+			const includeExcludedAccounts = args.includeExcludedAccounts ?? false;
 			transactions = transactions.filter((t) =>
-				countsForPersonalFinance(t, excludedAccountIds),
+				visibleInMovementsHistory(t, excludedAccountIds, {
+					includeExcludedAccounts,
+				}),
 			);
 		}
 		if (args.creditId) {
@@ -226,7 +234,13 @@ export const list = query({
 		const searchTerm = args.search?.trim().toLowerCase();
 
 		for (const transaction of transactions) {
-			const item = await enrichTransaction(ctx, transaction);
+			const item = {
+				...(await enrichTransaction(ctx, transaction)),
+				excludedFromPersonalFinance: !countsForPersonalFinance(
+					transaction,
+					excludedAccountIds,
+				),
+			};
 			if (searchTerm) {
 				const haystack = [
 					item.notes ?? "",

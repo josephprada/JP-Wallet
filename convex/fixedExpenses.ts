@@ -4,6 +4,7 @@ import type { QueryCtx } from "./_generated/server";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { requireAccountOwnership, requireCategoryOwnership, requireUserId } from "./lib/auth";
 import { getBalanceDeltas, invertDeltas } from "./lib/balance";
+import { revertCreditPaymentForTransaction } from "./lib/creditPaymentRegistration";
 import {
 	dateKeyFromTimestamp,
 	dueTimestampForPeriodKey,
@@ -447,6 +448,9 @@ export const unmarkPaid = mutation({
 					userId,
 					transaction._id,
 				);
+
+				// Cuota de crédito vinculada: devolver la cuota a pendiente y el saldo del crédito.
+				await revertCreditPaymentForTransaction(ctx, userId, transaction._id);
 
 				const deltas = getBalanceDeltas({
 					type: transaction.type,

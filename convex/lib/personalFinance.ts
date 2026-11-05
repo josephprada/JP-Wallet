@@ -72,6 +72,23 @@ export function countsForPersonalFinance(
 }
 
 /**
+ * Visibilidad en el historial de movimientos (independiente de los totales):
+ * con `includeExcludedAccounts` se listan también los movimientos de cuentas
+ * excluidas para poder revisarlos y editarlos. Los movimientos internos del
+ * fondo escrow de créditos siguen ocultos.
+ */
+export function visibleInMovementsHistory(
+	transaction: Doc<"transactions">,
+	excludedAccountIds: Set<Id<"accounts">>,
+	options: { includeExcludedAccounts: boolean },
+): boolean {
+	if (options.includeExcludedAccounts) {
+		return !transaction.isCreditFundMovement;
+	}
+	return countsForPersonalFinance(transaction, excludedAccountIds);
+}
+
+/**
  * Transferencia desde cuenta personal hacia ahorro/meta aislada.
  * Cuenta como gasto del mes (sale del disponible y del neto).
  */

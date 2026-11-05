@@ -1,3 +1,4 @@
+import { DevLoginForm } from "@app/components/auth/DevLoginForm";
 import { AuroraOrbs } from "@app/components/shell/AuroraOrbs";
 import { useAuth } from "@app/lib/auth/useAuth";
 import { OAUTH_NEXT_STORAGE_KEY } from "@app/lib/auth/googlePopupSignIn";
@@ -82,6 +83,8 @@ export function LoginScreen() {
 							Continuar con Google
 						</Button>
 					</div>
+
+					{import.meta.env.DEV ? <DevLoginForm /> : null}
 
 					{(isLoading || pending) && (
 						<div className="animate-stagger-item">

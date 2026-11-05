@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireCreditOwnership, requireUserId } from "./lib/auth";
 import { markOverdueStatus } from "./lib/creditDates";
+import { clearLinkedFixedExpenseForCreditTransaction } from "./lib/creditFixedExpense";
 import {
 	createAndRegisterCreditPayment,
 } from "./lib/creditPaymentRegistration";
@@ -73,6 +74,11 @@ export const markUnpaid = mutation({
 		}
 
 		if (payment.transactionId) {
+			await clearLinkedFixedExpenseForCreditTransaction(
+				ctx,
+				credit,
+				payment.transactionId,
+			);
 			await removeCreditLinkedTransaction(ctx, userId, payment.transactionId);
 		}
 

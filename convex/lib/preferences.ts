@@ -69,6 +69,7 @@ export const DEFAULT_USER_PREFERENCES = {
 	notificationsEnabled: true,
 	reportEmailEnabled: false,
 	pushEnabled: false,
+	balanceEditEnabled: false,
 };
 
 export type ResolvedUserPreferences = {
@@ -86,6 +87,7 @@ export type ResolvedUserPreferences = {
 	notificationsEnabled: boolean;
 	reportEmailEnabled: boolean;
 	pushEnabled: boolean;
+	balanceEditEnabled: boolean;
 	updatedAt: number;
 };
 
@@ -99,6 +101,7 @@ type PartialPreferencesDoc = {
 	notificationsEnabled?: boolean;
 	reportEmailEnabled?: boolean;
 	pushEnabled?: boolean;
+	balanceEditEnabled?: boolean;
 	updatedAt?: number;
 };
 
@@ -120,6 +123,8 @@ export function resolveUserPreferences(
 		reportEmailEnabled:
 			doc?.reportEmailEnabled ?? DEFAULT_USER_PREFERENCES.reportEmailEnabled,
 		pushEnabled: doc?.pushEnabled ?? DEFAULT_USER_PREFERENCES.pushEnabled,
+		balanceEditEnabled:
+			doc?.balanceEditEnabled ?? DEFAULT_USER_PREFERENCES.balanceEditEnabled,
 		updatedAt,
 	};
 }

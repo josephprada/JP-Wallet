@@ -1,5 +1,7 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
+import { pickInstallmentForPeriod, shouldAdvancePaidPeriod } from "./creditFixedExpenseSync";
+import { periodKeyFromTimestamp } from "./period";
 import { validateDayOfMonth, validatePositiveCopAmount } from "./validators";
 
 export async function resolveCreditInstallmentAmount(
@@ -104,4 +106,83 @@ export async function deleteLinkedCreditFixedExpense(
 	if (fixedExpense) {
 		await ctx.db.delete(credit.linkedFixedExpenseId);
 	}
+}
+
+/** Monto del gasto fijo = valor real (totalDue) de la próxima cuota pendiente. */
+async function syncLinkedFixedExpenseAmountFromSchedule(
+	ctx: MutationCtx,
+	credit: Pick<Doc<"credits">, "_id" | "linkedFixedExpenseId">,
+): Promise<void> {
+	if (!credit.linkedFixedExpenseId) return;
+	const fixedExpense = await ctx.db.get(credit.linkedFixedExpenseId);
+	if (!fixedExpense) return;
+
+	const payments = await ctx.db
+		.query("creditPayments")
+		.withIndex("by_credit", (q) => q.eq("creditId", credit._id))
+		.collect();
+	const next = pickInstallmentForPeriod(
+		payments,
+		periodKeyFromTimestamp(Date.now()),
+	);
+	if (!next || next.totalDue === fixedExpense.amount) return;
+
+	await ctx.db.patch(fixedExpense._id, {
+		amount: next.totalDue,
+		updatedAt: Date.now(),
+	});
+}
+
+/**
+ * Al pagar una cuota (desde el panel del crédito, el formulario de movimientos
+ * o la card del gasto fijo) marca el gasto fijo vinculado como pagado en el
+ * mes de vencimiento de esa cuota.
+ */
+export async function markLinkedFixedExpensePaidForCreditPayment(
+	ctx: MutationCtx,
+	credit: Pick<Doc<"credits">, "_id" | "linkedFixedExpenseId">,
+	payment: Pick<Doc<"creditPayments">, "dueDate">,
+	transactionId: Id<"transactions">,
+): Promise<void> {
+	if (!credit.linkedFixedExpenseId) return;
+	const fixedExpense = await ctx.db.get(credit.linkedFixedExpenseId);
+	if (!fixedExpense) return;
+
+	const now = Date.now();
+	await ctx.db.patch(transactionId, {
+		sourceFixedExpenseId: fixedExpense._id,
+		updatedAt: now,
+	});
+
+	const periodKey = periodKeyFromTimestamp(payment.dueDate);
+	if (shouldAdvancePaidPeriod(fixedExpense.lastPaidPeriodKey, periodKey)) {
+		await ctx.db.patch(fixedExpense._id, {
+			lastPaidPeriodKey: periodKey,
+			lastPaidTransactionId: transactionId,
+			updatedAt: now,
+		});
+	}
+
+	await syncLinkedFixedExpenseAmountFromSchedule(ctx, credit);
+}
+
+/** Revierte el estado "pagado" del gasto fijo cuando se deshace el pago de la cuota. */
+export async function clearLinkedFixedExpenseForCreditTransaction(
+	ctx: MutationCtx,
+	credit: Pick<Doc<"credits">, "_id" | "linkedFixedExpenseId">,
+	transactionId: Id<"transactions">,
+): Promise<void> {
+	if (!credit.linkedFixedExpenseId) return;
+	const fixedExpense = await ctx.db.get(credit.linkedFixedExpenseId);
+	if (!fixedExpense) return;
+
+	if (fixedExpense.lastPaidTransactionId === transactionId) {
+		await ctx.db.patch(fixedExpense._id, {
+			lastPaidPeriodKey: undefined,
+			lastPaidTransactionId: undefined,
+			updatedAt: Date.now(),
+		});
+	}
+
+	await syncLinkedFixedExpenseAmountFromSchedule(ctx, credit);
 }
