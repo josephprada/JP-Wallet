@@ -6,6 +6,7 @@ import { PDFDocument, StandardFonts } from "pdf-lib";
 import webpush from "web-push";
 import { internal } from "./_generated/api";
 import { action, internalAction } from "./_generated/server";
+import { normalizeVapidSubject } from "./lib/vapid";
 
 export const sendEmailWithReport = internalAction({
 	args: {
@@ -159,7 +160,7 @@ type PushSubscriptionPayload = {
 type PushSendResult =
 	| {
 			skipped: true;
-			skipReason: "vapid_missing";
+			skipReason: "vapid_missing" | "vapid_invalid";
 			sent: 0;
 			gone: string[];
 			failures: { statusCode?: number; message: string }[];
@@ -181,7 +182,7 @@ async function deliverWebPush(args: {
 }): Promise<PushSendResult> {
 	const publicKey = process.env.VAPID_PUBLIC_KEY;
 	const privateKey = process.env.VAPID_PRIVATE_KEY;
-	const subject = process.env.VAPID_SUBJECT ?? "mailto:support@wallet.lavalex.co";
+	const subject = normalizeVapidSubject(process.env.VAPID_SUBJECT);
 
 	if (!publicKey || !privateKey) {
 		console.warn("VAPID keys not set; skipping push");
@@ -194,7 +195,21 @@ async function deliverWebPush(args: {
 		};
 	}
 
-	webpush.setVapidDetails(subject, publicKey, privateKey);
+	try {
+		if (!subject) throw new Error("VAPID_SUBJECT must be mailto: or https:");
+		webpush.setVapidDetails(subject, publicKey, privateKey);
+	} catch (err: unknown) {
+		console.error("Invalid VAPID configuration; skipping push", {
+			message: err instanceof Error ? err.message : String(err),
+		});
+		return {
+			skipped: true,
+			skipReason: "vapid_invalid",
+			sent: 0,
+			gone: [],
+			failures: [],
+		};
+	}
 
 	const payload = JSON.stringify({
 		title: args.title,
@@ -275,6 +290,7 @@ export type SendTestPushResult =
 	| { status: "push_disabled" }
 	| { status: "no_subscription" }
 	| { status: "vapid_missing"; subscriptionCount: number }
+	| { status: "vapid_invalid"; subscriptionCount: number }
 	| { status: "all_gone"; subscriptionCount: number; gone: number }
 	| {
 			status: "send_failed";
@@ -332,7 +348,7 @@ export const sendTestPush = action({
 
 		if (result.skipped) {
 			return {
-				status: "vapid_missing",
+				status: result.skipReason,
 				subscriptionCount: delivery.subscriptions.length,
 			};
 		}
