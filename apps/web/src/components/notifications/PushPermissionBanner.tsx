@@ -24,6 +24,8 @@ function messageForTestResult(result: TestPushResult): string {
 			return `Push de prueba enviada (${result.sent ?? 0} de ${result.subscriptionCount ?? 0}). Revisa la bandeja del sistema.`;
 		case "vapid_missing":
 			return "El servidor no tiene claves VAPID configuradas. Revisa VAPID_* en Convex.";
+		case "vapid_invalid":
+			return "La configuración VAPID del servidor es inválida (VAPID_SUBJECT o claves). Revisa VAPID_* en Convex.";
 		case "no_subscription":
 			return "No hay suscripción guardada. Desactiva y vuelve a Activar push.";
 		case "push_disabled":
