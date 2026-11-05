@@ -178,6 +178,8 @@ async function deliverWebPush(args: {
 	title: string;
 	body: string;
 	url: string;
+	/** Mostrar aunque la app esté en primer plano (push de prueba). */
+	force?: boolean;
 	onGone?: (endpoints: string[]) => Promise<void>;
 }): Promise<PushSendResult> {
 	const publicKey = process.env.VAPID_PUBLIC_KEY;
@@ -215,6 +217,7 @@ async function deliverWebPush(args: {
 		title: args.title,
 		body: args.body,
 		url: args.url,
+		...(args.force ? { force: true } : {}),
 	});
 
 	const gone: string[] = [];
@@ -339,6 +342,7 @@ export const sendTestPush = action({
 			title: "JP-WALLET",
 			body: "Push de prueba — si ves esto, el envío funciona.",
 			url: "/settings",
+			force: true,
 			onGone: async (endpoints) => {
 				await ctx.runMutation(internal.notifications.removePushByEndpoints, {
 					endpoints,
